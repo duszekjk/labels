@@ -1,11 +1,5 @@
-//
-//  ConversionMenu.swift
-//  labels
-//
-//  Created by Jacek Kałużny on 14/01/2025.
-//
 
-
+import SwiftUI
 struct ConversionMenu: View {
     let currentFormat: String
     let datasetType: DatasetType
@@ -13,11 +7,9 @@ struct ConversionMenu: View {
     @Binding var projectSettings: ProjectSettings
     @Binding var labels: [ClassLabel]
     let imageName: String
-
     @State private var selectedFormat: String = ""
     @State private var isConverting: Bool = false
     @State private var progress: Double = 0.0
-
     var body: some View {
         VStack {
             Text("Current Format: \(currentFormat)")
@@ -25,7 +17,6 @@ struct ConversionMenu: View {
             Text(labelStorageFormats.first { $0.name == currentFormat }?.description ?? "")
                 .font(.subheadline)
                 .padding(.bottom)
-
             Picker("Convert to:", selection: $selectedFormat) {
                 ForEach(labelStorageFormats.filter { $0.supportedDatasetTypes.contains(datasetType) }, id: \.id) { format in
                     Text(format.name).tag(format.name)
@@ -33,7 +24,6 @@ struct ConversionMenu: View {
             }
             .pickerStyle(MenuPickerStyle())
             .padding()
-
             if let targetFormat = labelStorageFormats.first(where: { $0.name == selectedFormat }) {
                 Text("Target Format: \(targetFormat.name)")
                     .font(.headline)
@@ -41,12 +31,10 @@ struct ConversionMenu: View {
                     .font(.subheadline)
                     .padding(.bottom)
             }
-
             if isConverting {
                 ProgressView("Converting...", value: progress, total: 1.0)
                     .padding()
             }
-
             Button("Convert") {
                 startConversion(to: selectedFormat)
             }
@@ -55,13 +43,10 @@ struct ConversionMenu: View {
         }
         .padding()
     }
-
     private func startConversion(to targetFormat: String) {
         guard !targetFormat.isEmpty else { return }
-
         isConverting = true
         progress = 0.0
-
         DispatchQueue.global(qos: .userInitiated).async {
             convertDatasetWithProgress(
                 folderURL: folderURL,
@@ -73,11 +58,47 @@ struct ConversionMenu: View {
                     progress = progressValue
                 }
             }
-
             DispatchQueue.main.async {
                 isConverting = false
                 projectSettings.labelStorage = targetFormat
+                let projectSettingsMenager = ProjectSettingsManager(settings: projectSettings, directoryURL: folderURL)
+                projectSettingsMenager.settings = projectSettings
+                projectSettingsMenager.saveSettings()
             }
         }
+    }
+}
+func convertDatasetWithProgress(
+    folderURL: URL,
+    sourceLabelStorage: String,
+    targetLabelStorage: String,
+    classes: inout [YOLOClass],
+    progress: @escaping (Double) -> Void
+) {
+    print("converting to \(targetLabelStorage)")
+    var localClasses = classes
+    applyToDatasetWithProgress(
+        folderURL: folderURL,
+        labelStorage: sourceLabelStorage,
+        classes: &localClasses,
+        progress: progress
+    ) { fileURL, labels, imageName in
+        let newExtension: String
+        switch targetLabelStorage {
+        case "COCO JSON", "Pascal VOC JSON", "YOLO JSON", "LabelMe JSON", "CoreML JSON":
+            newExtension = "json"
+        case "Pascal VOC CSV", "Single CSV File", "Per-Image CSV":
+            newExtension = "csv"
+        default:
+            newExtension = "txt" 
+        }
+        let newLabelFileName = fileURL.deletingPathExtension().lastPathComponent + "." + newExtension
+        saveLabelsInFormat(
+            labelStorage: targetLabelStorage,
+            filePath: folderURL,
+            labelFileName: newLabelFileName,
+            imageName: imageName,
+            labels: labels, classes: &classes
+        )
     }
 }

@@ -1,66 +1,89 @@
-//
-//  ContentView.swift
-//  labels
-//
-//  Created by Jacek Kałużny on 28/12/2024.
-//
-
 import SwiftUI
-import SwiftData
-
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
+    @StateObject private var folderAccessManager = FolderAccessManager()
+    @State private var selectedProjectType: DatasetType?
+    @State private var projectSettings: ProjectSettings = ProjectSettings(name: "", description: "", hashtags: [], datasetType: .none, labelStorage: "", creationDate: Date.now, lastModifiedDate: Date.now, directoryPath: "", classes: [])
+    @State private var showSavePicker = false
+    @State private var showLoadPicker = false
+    @State private var showGetData = false
+    @State private var navigateToMainView = false
+    @State private var workflowStep: WorkflowStep = .none
+    @State private var folderUrl: URL? = nil
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        VStack {
+            if selectedProjectType == nil {
+                ProjectTypeSelectionView(
+                    onTypeSelected: { type in
+                        selectedProjectType = type
+                        workflowStep = .saving
+                        showSavePicker = true
+                    },
+                    onLoadSelected: {
+                        workflowStep = .loading
+                        showSavePicker = true
+                    }
+                )
+            }
+            else
+            {
+                if workflowStep == .ready
+                {
+                    if let folderURL = folderUrl {
+                        MainView(folderURL: folderURL, selectedProjectType: $selectedProjectType, projectSettings: $projectSettings, projectIsOpenned: $navigateToMainView)
+                            .onAppear()
+                            {
+                                print("main is visible")
+                                folderAccessManager.folderURL = folderURL
+                            }
                     }
                 }
-                .onDelete(perform: deleteItems)
-            }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
+                else
+                {
+                    ProgressView(value: 0.25)
+                        .padding()
                 }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+            }
+        }
+        .sheet(isPresented: $showSavePicker, onDismiss: {
+            if workflowStep == .saving {
+                workflowStep = .gettingData
+                showGetData = true
+            }
+            if workflowStep == .loading {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { 
+                    if folderUrl != nil {
+                        print("workflowStep .loading")
+                        let projectSettingsMenager = ProjectSettingsManager(settings: nil, directoryURL: folderUrl)
+                        projectSettings = projectSettingsMenager.settings
+                        selectedProjectType = projectSettings.datasetType
+                        navigateToMainView = true
+                        workflowStep = .ready
+                    } else {
+                        print("folderUrl = nil in workflowStep .loading")
                     }
                 }
             }
-        } detail: {
-            Text("Select an item")
+        }) {
+            FolderPicker(folderURL: $folderUrl, workflowStep: $workflowStep, showSavePicker: $showSavePicker)
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+        .sheet(isPresented: $showGetData, onDismiss: {
+            if workflowStep == .gettingData {
+                workflowStep = .ready
+                navigateToMainView = true
+            }
+        }) {
+            if let selectedProjectType = selectedProjectType
+            {
+                CreateProjectSettingsView(datasetType: selectedProjectType, folderUrl: $folderUrl, projectSettings: $projectSettings, showGetData: $showGetData)
             }
         }
     }
 }
-
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+enum WorkflowStep {
+    case none
+    case saving
+    case gettingData
+    case loading
+    case loadingB
+    case ready
 }

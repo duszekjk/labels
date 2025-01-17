@@ -1,36 +1,34 @@
-import SwiftUI
 
+import SwiftUI
 struct ProjectTypeSelectionView: View {
-    @State private var selectedProjectType: DatasetType?
-    @State private var navigateToDirectorySelection = false
-    
+    var onTypeSelected: (DatasetType) -> Void
+    var onLoadSelected: () -> Void
     var body: some View {
         VStack(spacing: 20) {
-            Text("Choose Project Type")
+            Text("Load Project")
                 .font(.title)
-            
+            Button("Select Directory") {
+                onLoadSelected()
+            }
+            .buttonStyle(.borderedProminent)
+            Divider()
+                .padding(.vertical)
+            Text("Create New Project")
+                .font(.title)
+            Text("Choose Project Type")
             Button("Classification") {
-                selectedProjectType = .classification
-                navigateToDirectorySelection = true
+                onTypeSelected(.classification)
             }
-            
             Button("Bounding Box Annotation") {
-                selectedProjectType = .boundingBox
-                navigateToDirectorySelection = true
+                onTypeSelected(.boundingBox)
             }
-            
             Button("Instance Segmentation") {
-                selectedProjectType = .instanceSegmentation
-                navigateToDirectorySelection = true
+                onTypeSelected(.instanceSegmentation)
             }
-            
             Button("Semantic Segmentation") {
-                selectedProjectType = .semanticSegmentation
-                navigateToDirectorySelection = true
+                onTypeSelected(.semanticSegmentation)
             }
         }
-        .navigationDestination(isPresented: $navigateToDirectorySelection) {
-            DirectorySelectionView(projectType: selectedProjectType!)
-        }
+        .padding()
     }
 }

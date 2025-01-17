@@ -1,142 +1,128 @@
-import SwiftUI
 
+import SwiftUI
+import CreateML
+import Vision
 struct TrainingView: View {
-    @Binding var projectSettings: ProjectSettings
-    let folderURL: URL
-    @State private var isTraining = false
     @State private var progress: Float = 0.0
-    @State private var trainingLogs: [String] = []
+    @State private var isTraining = false
     @State private var errorMessage: String?
-    
+    let datasetPath: URL
     var body: some View {
         VStack {
-            Text("Training Model")
-                .font(.largeTitle)
-                .padding()
-            
-            // Progress View
             if isTraining {
-                VStack {
-                    ProgressView(value: progress)
-                        .padding()
-                    
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 5) {
-                            ForEach(trainingLogs, id: \.self) { log in
-                                Text(log)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                    .padding(2)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                ProgressView(value: progress)
+                    .padding()
+                    .onAppear {
+                        startTraining()
                     }
-                    .frame(height: 200)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .padding()
-                }
             } else {
-                Text("Start fine-tuning your model with the labeled dataset.")
-                    .foregroundColor(.secondary)
-                    .padding()
+                Button("Start Training") {
+                    isTraining = true
+                }
+                .padding()
             }
-            
-            // Training Button
-            Button(action: {
-                startTraining()
-            }) {
-                Text(isTraining ? "Training in Progress..." : "Start Training")
-                    .padding()
-                    .background(isTraining ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            .disabled(isTraining)
-            
-            // Error Message
             if let errorMessage = errorMessage {
                 Text("Error: \(errorMessage)")
                     .foregroundColor(.red)
-                    .padding()
             }
-            
-            Spacer()
         }
         .padding()
     }
-    
     func startTraining() {
-        isTraining = true
-        progress = 0.0
-        trainingLogs = []
-        errorMessage = nil
-        
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                // Prepare dataset
-                let dataset = try prepareDataset()
-                trainingLogs.append("Dataset prepared with \(dataset.images.count) images and \(dataset.labels.count) annotations.")
-                
-                // Start training
-                let numClasses = projectSettings.classes.count
-                let trainedModelPath = try fineTuneModel(dataset: dataset, numClasses: numClasses)
-                
+                guard let startModelPath = Bundle.main.url(forResource: "yolov8s_updatable", withExtension: "mlmodelc") else {
+                    fatalError("❌ Model not found in the app bundle.")
+                }
+                let modelPath = try fineTuneObjectDetectionModel(modelPath: startModelPath, dataset: datasetPath)
                 DispatchQueue.main.async {
-                    progress = 1.0
-                    trainingLogs.append("Model training completed.")
-                    trainingLogs.append("Trained model saved to \(trainedModelPath.path).")
                     isTraining = false
+                    print("Model trained and saved at \(modelPath)")
                 }
             } catch {
                 DispatchQueue.main.async {
-                    errorMessage = error.localizedDescription
                     isTraining = false
+                    errorMessage = error.localizedDescription
                 }
             }
         }
     }
-    
-    func prepareDataset() throws -> (images: [URL], labels: [URL]) {
-        // Collect all labeled images
-        let labeledImages = projectSettings.classes.flatMap { $0.name }
-        var images: [URL] = []
-        var labels: [URL] = []
-        
-        for file in try FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil) {
-            if file.pathExtension == "jpg" || file.pathExtension == "png" {
-                let labelFile = file.deletingPathExtension().appendingPathExtension("txt")
-                if FileManager.default.fileExists(atPath: labelFile.path) {
-                    images.append(file)
-                    labels.append(labelFile)
+}
+func prepareBoundingBoxData(dataset: URL, modelPath: URL) throws -> MLBatchProvider {
+    var featureProviders: [MLFeatureProvider] = []
+    guard let imageConstraint = try getImageConstraint(from: modelPath) else {
+        throw NSError(domain: "ImageConstraintError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Image constraint not found in model."])
+    }
+    let jsonFile = dataset.appendingPathComponent("coreml_annotations.json")
+    let jsonData = try Data(contentsOf: jsonFile)
+    let annotations = try JSONSerialization.jsonObject(with: jsonData, options: []) as! [[String: Any]]
+    for annotation in annotations {
+        guard let imageName = annotation["image"] as? String,
+              let imageAnnotations = annotation["annotations"] as? [[String: Any]],
+              let imagePath = dataset.appendingPathComponent(imageName) as URL?,
+              let image = try? MLFeatureValue(imageAt: imagePath, constraint: imageConstraint) else {
+            continue
+        }
+        for object in imageAnnotations {
+            guard let label = object["label"] as? String,
+                  let coordinates = object["coordinates"] as? [String: CGFloat],
+                  let x = coordinates["x"],
+                  let y = coordinates["y"],
+                  let width = coordinates["width"],
+                  let height = coordinates["height"] else {
+                continue
+            }
+            let normalizedX = x / CGFloat(imageConstraint.pixelsWide)
+            let normalizedY = y / CGFloat(imageConstraint.pixelsHigh)
+            let normalizedWidth = width / CGFloat(imageConstraint.pixelsWide)
+            let normalizedHeight = height / CGFloat(imageConstraint.pixelsHigh)
+            let features: [String: MLFeatureValue] = [
+                "image": image,
+                "label": MLFeatureValue(string: label),
+                "x": MLFeatureValue(double: Double(normalizedX)),
+                "y": MLFeatureValue(double: Double(normalizedY)),
+                "width": MLFeatureValue(double: Double(normalizedWidth)),
+                "height": MLFeatureValue(double: Double(normalizedHeight))
+            ]
+            let featureProvider = try MLDictionaryFeatureProvider(dictionary: features)
+            featureProviders.append(featureProvider)
+        }
+    }
+    return MLArrayBatchProvider(array: featureProviders)
+}
+func fineTuneObjectDetectionModel(modelPath: URL, dataset: URL) throws {
+    let config = MLModelConfiguration()
+    config.computeUnits = .all
+    let trainingData = try prepareBoundingBoxData(dataset: dataset, modelPath: modelPath)
+    let updateTask = try MLUpdateTask(
+        forModelAt: modelPath,
+        trainingData: trainingData,
+        configuration: config,
+        completionHandler: { context in
+            if context.task.error != nil {
+                print("❌ Training failed with error: \(context.task.error!.localizedDescription)")
+            } else if context.task.state == .completed {
+                print("✅ Training completed successfully.")
+                let fineTunedModelPath = dataset.appendingPathComponent("FineTunedObjectDetection.mlmodel")
+                do {
+                    try context.model.write(to: fineTunedModelPath)
+                    print("✅ Fine-tuned model saved at: \(fineTunedModelPath)")
+                } catch {
+                    print("❌ Failed to save fine-tuned model: \(error.localizedDescription)")
                 }
+            } else {
+                print("⚠️ Training did not complete: \(context.task.state)")
             }
         }
-        
-        guard !images.isEmpty else {
-            throw NSError(domain: "TrainingError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No labeled images found."])
+    )
+    updateTask.resume()
+}
+func getImageConstraint(from modelPath: URL) throws -> MLImageConstraint? {
+    let model = try MLModel(contentsOf: modelPath)
+    for (inputName, input) in model.modelDescription.inputDescriptionsByName {
+        if input.type == .image {
+            return input.imageConstraint
         }
-        
-        return (images, labels)
     }
-    
-    func fineTuneModel(dataset: (images: [URL], labels: [URL]), numClasses: Int) throws -> URL {
-        // Example fine-tuning using Core ML or exporting to a training script
-        let modelPath = folderURL.appendingPathComponent("fine_tuned_model.mlmodelc")
-        
-        // Simulate training progress
-        for i in 1...10 {
-            DispatchQueue.main.async {
-                progress = Float(i) / 10.0
-                trainingLogs.append("Training progress: \(Int(progress * 100))%")
-            }
-            Thread.sleep(forTimeInterval: 0.5) // Simulate training delay
-        }
-        
-        // Save model (replace with actual training logic)
-        let trainedModel = "Trained YOLO Model with \(numClasses) classes"
-        try trainedModel.write(to: modelPath, atomically: true, encoding: .utf8)
-        
-        return modelPath
-    }
+    return nil
 }
