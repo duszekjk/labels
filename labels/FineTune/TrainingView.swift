@@ -7,8 +7,18 @@ struct TrainingView: View {
     @State private var isTraining = false
     @State private var errorMessage: String?
     let datasetPath: URL
+    @Binding var show: Bool
     var body: some View {
         VStack {
+            HStack
+            {
+                Spacer()
+                Button("Done") {
+                    show = false
+                }
+                .padding()
+            }
+            Spacer()
             if isTraining {
                 ProgressView(value: progress)
                     .padding()

@@ -36,6 +36,13 @@ struct DatasetCorrectionView: View {
                                     Text(yoloClass.name).tag(yoloClass.name)
                                 }
                             }
+                            .onAppear()
+                            {
+                                if(selectedOldClassName == "Select class")
+                                {
+                                    selectedOldClassName = projectSettings.classes.first?.name ?? "Select class"
+                                }
+                            }
                             .pickerStyle(MenuPickerStyle())
                             .onChange(of: selectedOldClassName) { newValue in
                                 updateClassDetails(for: newValue)

@@ -28,6 +28,8 @@ struct MainView: View {
     @State public var showDatasetLevel = false
     @State private var showTrain = false
     @State private var showConversionMenu = false
+    @State private var showProjectSettings = false
+    @State private var showGallery = false
     @State private var selectedItem: YOLOClass?
     @State public var speedMove: CGFloat = 0.0005
     private var defaultZoomScale: CGFloat {
@@ -80,7 +82,9 @@ struct MainView: View {
                             bottomToolbar
                         }
                 }
+                .coordinateSpace(name: "CustomSpace")
             }
+        
 #if os(macOS)
             .onAppear {
                 if let window = NSApp.keyWindow {
@@ -298,6 +302,9 @@ struct MainView: View {
             #if os(iOS)
             ToolbarItemGroup(placement: .topBarTrailing) {
                 trailingToolbarContent
+                    .sheet(isPresented: $showProjectSettings) {
+                        CreateProjectSettingsView(datasetType: projectSettings.datasetType, folderUrl: folderURL, name: projectSettings.name, description: projectSettings.description, icon: projectSettings.icon ?? "", hashtags: projectSettings.hashtags.joined(separator: ", "), labelStorage: getLabelStorage(byName:projectSettings.labelStorage), editing: true, projectSettings: $projectSettings, showGetData: $showProjectSettings)
+                    }
                     .sheet(isPresented: $showDatasetLevel) {
                         DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings)
                     }
@@ -311,9 +318,15 @@ struct MainView: View {
                             imageName: imageName
                         )
                     }
-                    .sheet(isPresented: $showTrain) {
-                        TrainingView(datasetPath: folderURL)
+                    .sheet(isPresented: $showGallery) {
+                        ImageGalleryView(images: $images, currentIndex: $currentIndex, image: $image, imageName: $imageName, loadImage: loadImage, onCancel: { showGallery = false })
                     }
+                    NavigationLink(
+                        destination: TrainingView(datasetPath: folderURL, show: $showTrain),
+                        isActive: $showTrain,
+                        label: { EmptyView() }
+                    )
+                    .hidden()
             }
             #elseif os(macOS)
             ToolbarItemGroup(placement: .automatic) {
@@ -322,30 +335,77 @@ struct MainView: View {
         }
         private var toolbarContent: some View {
             HStack {
-                Button(action: loadPreviousImage) {
-                    Text("Previous")
+                if(UIDevice.current.userInterfaceIdiom == .phone)
+                {
+                    Button(action: loadPreviousImage) {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .padding(.trailing, 45)
+                    .disabled(currentIndex <= 0)
+                    Spacer()
+                    drawingButton
+                    Spacer()
+                    zoomMenu
+                    Button(action: loadNextImage) {
+                        Image(systemName: "chevron.forward")
+                    }
+                    .disabled(currentIndex >= images.count - 1)
                 }
-                .disabled(currentIndex <= 0)
-                Spacer()
-                Text("\(imageName)")
-                Spacer()
-                drawingButton
+                else
+                {
+                    
+                    Button(action: loadPreviousImage) {
+                        Text("Previous")
+                    }
+                    .disabled(currentIndex <= 0)
+                    Spacer()
+                    imageInfoToolbarContent
+                    Spacer()
+                    drawingButton
+                    ZoomButtons(zoomScale: $zoomScale, defaultZoomScale: defaultZoomScale)
+                    Button(action: loadNextImage) {
+                        Text("Next")
+                    }
+                    .disabled(currentIndex >= images.count - 1)
+                }
+            }
+        }
+        private var zoomMenu: some View {
+            Menu {
                 ZoomButtons(zoomScale: $zoomScale, defaultZoomScale: defaultZoomScale)
-                Button(action: loadNextImage) {
-                    Text("Next")
+            }label: {
+                Label("", systemImage: "plus.magnifyingglass")
+            }
+        }
+        private var imageInfoToolbarContent: some View {
+            Group {
+                HStack {
+                    Text("\(currentIndex + 1) / \(images.count)")
+                        .frame(width: 70)
+                    Text((imageName as NSString).deletingPathExtension)
+                        .frame(width: 120)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .disabled(currentIndex >= images.count - 1)
+                .padding(.trailing, 10)
+                .onTapGesture {
+                    showGallery = true
+                }
             }
         }
         private var compactToolbarContent: some View {
-            Menu {
+            HStack
+            {
                 if selectedLabel == nil {
-                    datasetManagementMenu
-                } else {
-                    movementButtons
+                    Menu {
+                        datasetManagementMenu
+                    } label: {
+                        Label("Actions", systemImage: "ellipsis.circle")
+                    }
                 }
-            } label: {
-                Label("Actions", systemImage: "ellipsis.circle")
+//                else {
+//                    movementButtons
+//                }
             }
         }
         private var leadingToolbarContent: some View {
@@ -360,17 +420,35 @@ struct MainView: View {
         private var trailingToolbarContent: some View {
             Group {
                 if selectedLabel != nil {
+                    if(UIDevice.current.userInterfaceIdiom == .phone)
+                    {
+                        movementButtons
+                    }
                     resizeButtons
                     classPickerButton
                 } else {
-                    Button(action: closeProject) {
-                        Text("Close")
+                    if(UIDevice.current.userInterfaceIdiom == .phone)
+                    {
+//                        imageInfoToolbarContent
+                        Button(action: closeProject) {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    else
+                    {
+                        Button(action: closeProject) {
+                            Text("Close")
+                        }
                     }
                 }
             }
         }
         private var datasetManagementMenu: some View {
             Group {
+                Button("Project Settings"){
+                    showProjectSettings = true
+                }
                 Button("Dataset Changes") {
                     showDatasetLevel = true
                 }

@@ -11,25 +11,25 @@ func saveLabelsInFormat(
 ) {
     switch labelStorage {
     case "COCO JSON":
-        saveAsCOCOJSON(filePath: filePath, imageName: imageName, labelFileName: labelFileName, labels: labels)
+        saveAsCOCOJSON(filePath: filePath, imageName: imageName, labelFileName: labelFileName, labels: labels, classes: &classes)
     case "Pascal VOC JSON":
-        saveAsPascalVOCJSON(filePath: filePath, labelFileName: labelFileName, labels: labels)
+        saveAsPascalVOCJSON(filePath: filePath, labelFileName: labelFileName, labels: labels, classes: &classes)
     case "YOLO JSON":
-        saveAsYOLOJSON(filePath: filePath, labelFileName: labelFileName, labels: labels)
+        saveAsYOLOJSON(filePath: filePath, labelFileName: labelFileName, labels: labels, classes: &classes)
     case "YOLO CSV":
         saveAsYOLOCSV(filePath: filePath, labelFileName: labelFileName, imageName: imageName, labels: labels, classes: &classes)
     case "LabelMe JSON":
-        saveAsLabelMeJSON(filePath: filePath, labelFileName: labelFileName, labels: labels)
+        saveAsLabelMeJSON(filePath: filePath, labelFileName: labelFileName, labels: labels, classes: &classes)
     case "SQLite Database":
-        saveToSQLiteDatabase(filePath: filePath, labelFileName: labelFileName, labels: labels)
+        saveToSQLiteDatabase(filePath: filePath, labelFileName: labelFileName, labels: labels, classes: &classes)
     case "CoreML JSON":
         let coreMLFilePath = filePath.appendingPathComponent("coreml_annotations.json")
-        saveCoreMLJSON(filePath: coreMLFilePath, imageName: imageName, labels: labels)
+        saveCoreMLJSON(filePath: coreMLFilePath, imageName: imageName, labels: labels, classes: &classes)
     default:
         print("❌ Unsupported label storage format: \(labelStorage)")
     }
 }
-func saveAsYOLOJSON(filePath: URL, labelFileName: String, labels: [ClassLabel]) {
+func saveAsYOLOJSON(filePath: URL, labelFileName: String, labels: [ClassLabel], classes: inout [YOLOClass]) {
     struct YOLOAnnotation: Codable {
         let className: String
         let x: Double
@@ -37,6 +37,7 @@ func saveAsYOLOJSON(filePath: URL, labelFileName: String, labels: [ClassLabel]) 
         let width: Double
         let height: Double
     }
+    sortClassesByName(&classes)
     let yoloAnnotations = labels.map { label -> YOLOAnnotation in
         let xCenter = label.box.origin.x + label.box.width / 2
         let yCenter = label.box.origin.y + label.box.height / 2
@@ -93,7 +94,8 @@ func saveAsYOLOCSV(filePath: URL, labelFileName: String, imageName: String, labe
         print("❌S Failed to save YOLO CSV: \(error)")
     }
 }
-private func saveAsCOCOJSON(filePath: URL, imageName: String, labelFileName: String, labels: [ClassLabel]) {
+private func saveAsCOCOJSON(filePath: URL, imageName: String, labelFileName: String, labels: [ClassLabel], classes: inout [YOLOClass]) {
+    sortClassesByName(&classes)
     let labelFileURL = filePath.appendingPathComponent(labelFileName)
     var annotations: [String: [ClassLabel]] = [:]
     if let data = try? Data(contentsOf: labelFileURL),
@@ -109,17 +111,22 @@ private func saveAsCOCOJSON(filePath: URL, imageName: String, labelFileName: Str
         print("❌ Failed to save labels in COCO JSON format: \(error)")
     }
 }
-private func saveAsPascalVOCJSON(filePath: URL, labelFileName: String, labels: [ClassLabel]) {
+private func saveAsPascalVOCJSON(filePath: URL, labelFileName: String, labels: [ClassLabel], classes: inout [YOLOClass]) {
+    sortClassesByName(&classes)
 }
-private func saveAsLabelMeJSON(filePath: URL, labelFileName: String, labels: [ClassLabel]) {
+private func saveAsLabelMeJSON(filePath: URL, labelFileName: String, labels: [ClassLabel], classes: inout [YOLOClass]) {
+    sortClassesByName(&classes)
 }
-private func saveToSQLiteDatabase(filePath: URL, labelFileName: String, labels: [ClassLabel]) {
+private func saveToSQLiteDatabase(filePath: URL, labelFileName: String, labels: [ClassLabel], classes: inout [YOLOClass]) {
+    sortClassesByName(&classes)
 }
 func saveCoreMLJSON(
     filePath: URL,
     imageName: String,
-    labels: [ClassLabel]
+    labels: [ClassLabel],
+    classes: inout [YOLOClass]
 ) {
+    sortClassesByName(&classes)
     var allAnnotations = (try? JSONDecoder().decode([CoreMLAnnotation].self, from: Data(contentsOf: filePath))) ?? []
     let newAnnotations = labels.map { label in
         CoreMLAnnotation.Annotation(
@@ -150,7 +157,8 @@ func applyToDatasetWithProgress(
     labelStorage: String,
     classes: inout [YOLOClass],
     progress: @escaping (Double) -> Void,
-    action: (URL, inout [ClassLabel], String) -> Void
+    action: (URL, inout [ClassLabel], String, inout [YOLOClass]) -> Void,
+    actionBefore: ((URL, inout [ClassLabel], String, inout [YOLOClass]) -> Void)? = nil
 ) {
     do {
         let files = try FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)
@@ -162,12 +170,16 @@ func applyToDatasetWithProgress(
                 var labels: [ClassLabel] = []
                 var labelFileName: String?
                 do {
+                    if(actionBefore != nil)
+                    {
+                        actionBefore!(folderURL.appendingPathComponent(labelFileName ?? ""), &labels, imageName, &classes)
+                    }
                     (labels, labelFileName) = loadLabelsFromFormat(labelStorage: labelStorage, filePath: folderURL, imageName: imageName, classes: &classes)
                     if(labels.count < 1)
                     {
                         return
                     }
-                    action(folderURL.appendingPathComponent(labelFileName ?? ""), &labels, imageName)
+                    action(folderURL.appendingPathComponent(labelFileName ?? ""), &labels, imageName, &classes)
                     if let labelFileName = labelFileName {
                         saveLabelsInFormat(labelStorage: labelStorage, filePath: folderURL, labelFileName: labelFileName, imageName: imageName, labels: labels, classes: &classes)
                     }

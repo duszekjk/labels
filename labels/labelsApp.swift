@@ -17,6 +17,9 @@ struct labelsApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .overlay(
+                    GlobalMenuOverlay() // Add the global menu overlay
+                )
         }
         .modelContainer(sharedModelContainer)
     }

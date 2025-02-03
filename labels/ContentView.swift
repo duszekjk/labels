@@ -74,7 +74,7 @@ struct ContentView: View {
         }) {
             if let selectedProjectType = selectedProjectType
             {
-                CreateProjectSettingsView(datasetType: selectedProjectType, folderUrl: $folderUrl, projectSettings: $projectSettings, showGetData: $showGetData)
+                CreateProjectSettingsView(datasetType: selectedProjectType, folderUrl: folderUrl, projectSettings: $projectSettings, showGetData: $showGetData)
             }
         }
     }

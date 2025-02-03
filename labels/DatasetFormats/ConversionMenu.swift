@@ -12,34 +12,44 @@ struct ConversionMenu: View {
     @State private var progress: Double = 0.0
     var body: some View {
         VStack {
-            Text("Current Format: \(currentFormat)")
-                .font(.headline)
-            Text(labelStorageFormats.first { $0.name == currentFormat }?.description ?? "")
-                .font(.subheadline)
-                .padding(.bottom)
-            Picker("Convert to:", selection: $selectedFormat) {
-                ForEach(labelStorageFormats.filter { $0.supportedDatasetTypes.contains(datasetType) }, id: \.id) { format in
-                    Text(format.name).tag(format.name)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
-            .padding()
-            if let targetFormat = labelStorageFormats.first(where: { $0.name == selectedFormat }) {
-                Text("Target Format: \(targetFormat.name)")
-                    .font(.headline)
-                Text(targetFormat.description)
-                    .font(.subheadline)
-                    .padding(.bottom)
-            }
             if isConverting {
                 ProgressView("Converting...", value: progress, total: 1.0)
                     .padding()
             }
-            Button("Convert") {
-                startConversion(to: selectedFormat)
+            else
+            {
+                Text("Current Format: \(currentFormat)")
+                    .font(.headline)
+                Text(labelStorageFormats.first { $0.name == currentFormat }?.description ?? "")
+                    .font(.subheadline)
+                    .padding(.bottom)
+                Picker("Convert to:", selection: $selectedFormat) {
+                    ForEach(labelStorageFormats.filter { $0.supportedDatasetTypes.contains(datasetType) }, id: \.id) { format in
+                        Text(format.name).tag(format.name)
+                    }
+                }
+                .onAppear()
+                {
+                    if(selectedFormat == "")
+                    {
+                        selectedFormat = currentFormat
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+                .padding()
+                if let targetFormat = labelStorageFormats.first(where: { $0.name == selectedFormat }) {
+                    Text("Target Format: \(targetFormat.name)")
+                        .font(.headline)
+                    Text(targetFormat.description)
+                        .font(.subheadline)
+                        .padding(.bottom)
+                }
+                Button("Convert") {
+                    startConversion(to: selectedFormat)
+                }
+                .disabled(selectedFormat.isEmpty || isConverting || selectedFormat == currentFormat)
+                .padding()
             }
-            .disabled(selectedFormat.isEmpty || isConverting)
-            .padding()
         }
         .padding()
     }

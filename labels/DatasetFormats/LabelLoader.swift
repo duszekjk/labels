@@ -45,6 +45,7 @@ func loadFromYOLOJSON(filePath: URL, imageName: String, classes: inout [YOLOClas
         let width: Double
         let height: Double
     }
+    sortClassesByName(&classes)
     for index in classes.indices {
         classes[index].occurrenceCount = 0
     }
@@ -190,6 +191,7 @@ private func loadFromYOLOCSV(filePath: URL, imageName: String, classes: inout [Y
 func loadFromCOCOJSON(filePath: URL, imageName: String, classes: inout [YOLOClass]) -> (labels: [ClassLabel], labelFileName: String) {
     let possibleExtensions = ["json"]
     var labelFileName: String?
+    sortClassesByName(&classes)
     for ext in possibleExtensions {
         let potentialURL = filePath.appendingPathComponent("\(imageName).\(ext)")
         if FileManager.default.fileExists(atPath: potentialURL.path) {
@@ -205,6 +207,7 @@ func loadFromCOCOJSON(filePath: URL, imageName: String, classes: inout [YOLOClas
 func loadFromPascalVOCJSON(filePath: URL, imageName: String, classes: inout [YOLOClass]) -> (labels: [ClassLabel], labelFileName: String) {
     let possibleExtensions = ["json", "xml"]
     var labelFileName: String?
+    sortClassesByName(&classes)
     for ext in possibleExtensions {
         let potentialURL = filePath.appendingPathComponent("\(imageName).\(ext)")
         if FileManager.default.fileExists(atPath: potentialURL.path) {
@@ -220,6 +223,7 @@ func loadFromPascalVOCJSON(filePath: URL, imageName: String, classes: inout [YOL
 func loadFromLabelMeJSON(filePath: URL, imageName: String, classes: inout [YOLOClass]) -> (labels: [ClassLabel], labelFileName: String) {
     let possibleExtensions = ["json"]
     var labelFileName: String?
+    sortClassesByName(&classes)
     for ext in possibleExtensions {
         let potentialURL = filePath.appendingPathComponent("\(imageName).\(ext)")
         if FileManager.default.fileExists(atPath: potentialURL.path) {
@@ -234,6 +238,7 @@ func loadFromLabelMeJSON(filePath: URL, imageName: String, classes: inout [YOLOC
 }
 func loadFromSQLiteDatabase(filePath: URL, imageName: String, classes: inout [YOLOClass]) -> (labels: [ClassLabel], labelFileName: String) {
     let labelFileName = "annotations.sqlite"
+    sortClassesByName(&classes)
     return ([], labelFileName)
 }
 func loadCoreMLJSON(
@@ -241,6 +246,7 @@ func loadCoreMLJSON(
     imageName: String,
     classes: inout [YOLOClass]
 ) -> [ClassLabel] {
+    sortClassesByName(&classes)
     let allAnnotations = (try? JSONDecoder().decode([CoreMLAnnotation].self, from: Data(contentsOf: filePath))) ?? []
     guard let annotation = allAnnotations.first(where: { $0.image == imageName }) else {
         return [] 
