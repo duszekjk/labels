@@ -2,7 +2,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var folderAccessManager = FolderAccessManager()
     @State private var selectedProjectType: DatasetType?
-    @State private var projectSettings: ProjectSettings = ProjectSettings(name: "", description: "", hashtags: [], datasetType: .none, labelStorage: "", creationDate: Date.now, lastModifiedDate: Date.now, directoryPath: "", classes: [])
+    @State private var projectSettings: ProjectSettings = ProjectSettings(name: "", description: "", hashtags: [], datasetType: .none, labelStorage: "", creationDate: Date.now, lastModifiedDate: Date.now, directoryPath: "", imageSubdirectory: "", labelSubdirectory: "", classes: [])
     @State private var showSavePicker = false
     @State private var showLoadPicker = false
     @State private var showGetData = false

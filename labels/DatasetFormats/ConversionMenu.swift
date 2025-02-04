@@ -13,7 +13,7 @@ struct ConversionMenu: View {
     var body: some View {
         VStack {
             if isConverting {
-                ProgressView("Converting...", value: progress, total: 1.0)
+                ProgressViewWithEstimation("Converting...", value: progress, total: 1.0)
                     .padding()
             }
             else
@@ -62,6 +62,7 @@ struct ConversionMenu: View {
                 folderURL: folderURL,
                 sourceLabelStorage: currentFormat,
                 targetLabelStorage: targetFormat,
+                projectSettings: projectSettings,
                 classes: &projectSettings.classes
             ) { progressValue in
                 DispatchQueue.main.async {
@@ -82,17 +83,18 @@ func convertDatasetWithProgress(
     folderURL: URL,
     sourceLabelStorage: String,
     targetLabelStorage: String,
+    projectSettings: ProjectSettings,
     classes: inout [YOLOClass],
     progress: @escaping (Double) -> Void
 ) {
     print("converting to \(targetLabelStorage)")
     var localClasses = classes
     applyToDatasetWithProgress(
-        folderURL: folderURL,
+        folderURL: folderURL, projectSettings: projectSettings,
         labelStorage: sourceLabelStorage,
         classes: &localClasses,
         progress: progress
-    ) { fileURL, labels, imageName, _ in
+    ) { fileURL, labels, imageName, _, classesNow in
         let newExtension: String
         switch targetLabelStorage {
         case "COCO JSON", "Pascal VOC JSON", "YOLO JSON", "LabelMe JSON", "CoreML JSON":
@@ -103,12 +105,14 @@ func convertDatasetWithProgress(
             newExtension = "txt" 
         }
         let newLabelFileName = fileURL.deletingPathExtension().lastPathComponent + "." + newExtension
+        classesNow.lock.lock()
         saveLabelsInFormat(
             labelStorage: targetLabelStorage,
             filePath: folderURL,
             labelFileName: newLabelFileName,
             imageName: imageName,
-            labels: labels, classes: &classes
+            labels: labels, classes: &classesNow.classes
         )
+        classesNow.lock.unlock()
     }
 }

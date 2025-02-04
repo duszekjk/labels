@@ -152,48 +152,13 @@ func saveCoreMLJSON(
         print("❌ Failed to save CoreML JSON: \(error)")
     }
 }
-func applyToDatasetWithProgress(
-    folderURL: URL,
-    labelStorage: String,
-    classes: inout [YOLOClass],
-    progress: @escaping (Double) -> Void,
-    action: (URL, inout [ClassLabel], String, inout [YOLOClass]) -> Void,
-    actionBefore: ((URL, inout [ClassLabel], String, inout [YOLOClass]) -> Void)? = nil
-) {
-    do {
-        let files = try FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)
-        let totalFiles = files.count
-        var processedFiles = 0
-        for file in files {
-            autoreleasepool {
-                let imageName = file.lastPathComponent
-                var labels: [ClassLabel] = []
-                var labelFileName: String?
-                do {
-                    if(actionBefore != nil)
-                    {
-                        actionBefore!(folderURL.appendingPathComponent(labelFileName ?? ""), &labels, imageName, &classes)
-                    }
-                    (labels, labelFileName) = loadLabelsFromFormat(labelStorage: labelStorage, filePath: folderURL, imageName: imageName, classes: &classes)
-                    if(labels.count < 1)
-                    {
-                        return
-                    }
-                    action(folderURL.appendingPathComponent(labelFileName ?? ""), &labels, imageName, &classes)
-                    if let labelFileName = labelFileName {
-                        saveLabelsInFormat(labelStorage: labelStorage, filePath: folderURL, labelFileName: labelFileName, imageName: imageName, labels: labels, classes: &classes)
-                    }
-                } catch {
-                    print("❌A Failed to process image \(imageName): \(error)")
-                }
-            }
-            processedFiles += 1
-            progress(Double(processedFiles) / Double(totalFiles))
-        }
-    } catch {
-        print("❌A Failed to process dataset: \(error)")
-    }
-}
+
+
+
+
+
+
+
 func sortClassesByName(_ classes: inout [YOLOClass]) {
     classes.sort { $0.name < $1.name }
 }

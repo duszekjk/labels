@@ -5,7 +5,8 @@ import SwiftUI
 struct DatasetCorrectionView: View {
     let folderURL: URL
     @Binding var projectSettings: ProjectSettings
-    @Environment(\.presentationMode) var presentationMode 
+    @Binding var image: UIImage?
+    @Environment(\.presentationMode) var presentationMode
     @State private var progress: Double = 0.0
     @State private var isProcessing = false
     @State private var selectedOldClassName: String = "Select class"
@@ -16,13 +17,19 @@ struct DatasetCorrectionView: View {
     @State private var shiftY: CGFloat = 0.0
     @State private var scaleX: CGFloat = 1.0
     @State private var scaleY: CGFloat = 1.0
-    @State private var shiftMode: String = "Relative to box size" 
+    @State private var shiftMode: String = "Relative to box size"
+    
+    
+    @State var objectColors: [Color] = []
+    @State var backgroundColors: [Color] = []
+    @State var showColorPicker: Bool = false
+    
     let shiftModes = ["Relative to box size", "Relative to image size", "Value in pixels"]
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
                 if isProcessing {
-                    ProgressView(value: progress)
+                    ProgressViewWithEstimation(value: progress)
                         .padding()
                 }
                 else
@@ -69,6 +76,53 @@ struct DatasetCorrectionView: View {
                                         saveProjectSettings()
                                         isProcessing = false
                                     }
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Section {
+                        VStack
+                        {
+                            if(image != nil)
+                            {
+                                Text("Filter with color threshold")
+                                    .font(.headline)
+                                Button(action:
+                                        {
+                                    showColorPicker = true
+                                }, label:
+                                        {
+                                    Text("Select colors")
+                                })
+                                .sheet(isPresented: $showColorPicker) {
+                                    ColorPickerView(image: $image, objectColors: $objectColors, backgroundColors: $backgroundColors, presentationMode: $showColorPicker)
+                                }
+                                if(objectColors.count > 3)
+                                {
+                                    Button(action:
+                                            {
+                                        isProcessing = true
+                                        DispatchQueue.global(qos: .userInitiated).async {
+                                            filterBoxesByColor(
+                                                folderURL: folderURL,
+                                                labelStorage: projectSettings.labelStorage,
+                                                classes: &projectSettings.classes,
+                                                colorsObject: objectColors,
+                                                colorsBackground: backgroundColors,
+                                                progress: { progressValue in
+                                                    DispatchQueue.main.async {
+                                                        progress = progressValue
+                                                    }
+                                                })
+                                            DispatchQueue.main.async {
+                                                isProcessing = false
+                                            }
+                                        }
+                                    }, label:
+                                            {
+                                        Text("Filter")
+                                    })
                                 }
                             }
                         }
@@ -195,14 +249,28 @@ struct DatasetCorrectionView: View {
         newColor: Color,
         progress: @escaping (Double) -> Void
     ) {
+        var seenNames = Set<String>()
+        classes = classes.filter { seenNames.insert($0.name).inserted }
         var localClasses = classes
-        applyToDatasetWithProgress(folderURL: folderURL, labelStorage: labelStorage, classes: &localClasses, progress: progress, action:
-                                    { _, labels, imgname, classesIn in
-                                        if let classIndex = classesIn.firstIndex(where: { $0.name == oldClassName }) {
-                                            classesIn[classIndex].name = newClassName
-                                            classesIn[classIndex].color = PlatformColor(newColor)
-                                            saveProjectSettings()
+        applyToDatasetWithProgress(folderURL: folderURL, projectSettings: projectSettings, labelStorage: labelStorage, classes: &localClasses, progress: progress, action:
+                                    { _, labels, imgname, _, classesIn in
+                                        classesIn.lock.lock()
+                                        if let classIndex = classesIn.classes.firstIndex(where: { $0.name == oldClassName }) {
+                                            classesIn.classes[classIndex].name = newClassName
+                                            classesIn.classes[classIndex].color = PlatformColor(newColor)
+                                            sortClassesByName(&classesIn.classes)
+                                            var newClasses = classesIn.classes
+                                            var seenNames = Set<String>()
+                                            newClasses = newClasses.filter { seenNames.insert($0.name).inserted }
+                                            classesIn.classes = newClasses
+                                            DispatchQueue.main.async {
+                                                let projectSettingsManager = ProjectSettingsManager(settings: projectSettings, directoryURL: folderURL)
+                                                projectSettings.classes = newClasses
+                                                projectSettingsManager.settings = projectSettings
+                                                projectSettingsManager.saveSettings()
+                                            }
                                         }
+                                        classesIn.lock.unlock()
                                         for index in labels.indices {
                                             if labels[index].className == oldClassName {
                                                 labels[index].className = newClassName
@@ -211,15 +279,40 @@ struct DatasetCorrectionView: View {
                                         }
                                     },
                                    actionBefore:
-                                    { _, labels, imgname, classesIn in
-                                        if let classIndex = classesIn.firstIndex(where: { $0.name == newClassName }) {
-                                            classesIn[classIndex].name = oldClassName
-                                            classesIn[classIndex].color = PlatformColor(newColor)
+                                    { _, labels, imgname, _, classesIn in
+                                        classesIn.lock.lock()
+                                        if let classIndex = classesIn.classes.firstIndex(where: { $0.name == newClassName }) {
+                                            classesIn.classes[classIndex].name = oldClassName
+                                            classesIn.classes[classIndex].color = PlatformColor(newColor)
                                             saveProjectSettings()
                                         }
+                                        classesIn.lock.unlock()
                                     }
                                    )
         classes = localClasses
+    }
+    func filterBoxesByColor(
+        folderURL: URL,
+        labelStorage: String,
+        classes: inout [YOLOClass],
+        colorsObject: [Color],
+        colorsBackground: [Color],
+        progress: @escaping (Double) -> Void
+    ) {
+        applyToDatasetWithProgress(folderURL: folderURL, projectSettings: projectSettings, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, projectSettings, classesNow    in
+            let imageURL = fileURL.appending(path: projectSettings.imageSubdirectory).appending(path: imgname)
+            let maskURL = fileURL.appending(path: projectSettings.labelSubdirectory).appending(path: imgname)
+            filterBoundingBoxesAvg(
+                mainImageURL: imageURL,
+                maskImageURL: maskURL,
+                labels: &labels,
+                objectColors: colorsObject,
+                backgroundColors: colorsBackground,
+                speedAccuracyFactor: 50, // Higher values = more samples for accuracy
+                numberOfLabelsScale: 1.5,
+                sharedClasses: classesNow
+            )
+        }
     }
     func resizeBoxes(
         folderURL: URL,
@@ -229,7 +322,7 @@ struct DatasetCorrectionView: View {
         mode: String,
         progress: @escaping (Double) -> Void
     ) {
-        applyToDatasetWithProgress(folderURL: folderURL, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, _   in
+        applyToDatasetWithProgress(folderURL: folderURL, projectSettings: projectSettings, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, _, _   in
             for index in labels.indices {
                 var box = labels[index].box
                 let centerX = box.origin.x + box.width / 2
@@ -268,7 +361,7 @@ struct DatasetCorrectionView: View {
         mode: String,
         progress: @escaping (Double) -> Void
     ) {
-        applyToDatasetWithProgress(folderURL: folderURL, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, _  in
+        applyToDatasetWithProgress(folderURL: folderURL, projectSettings: projectSettings, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, _, _  in
             for index in labels.indices {
                 var box = labels[index].box
                 let originalCenterX = box.origin.x + box.width / 2

@@ -35,6 +35,10 @@ struct CreateProjectSettingsView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
             TextField("Description", text: $description)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+            TextField("Image Path (eg. \"/images\")", text: $projectSettings.imageSubdirectory)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            TextField("Label Path (eg. \"/labels\")", text: $projectSettings.labelSubdirectory)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
             TextField("Icon Path (Optional)", text: $icon)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
             TextField("Hashtags (comma-separated)", text: $hashtags)
@@ -93,6 +97,8 @@ struct CreateProjectSettingsView: View {
             creationDate: Date(),
             lastModifiedDate: Date(),
             directoryPath: folderUrl.path,
+            imageSubdirectory:"",
+            labelSubdirectory:"",
             classes: []
         )
         if(editing)

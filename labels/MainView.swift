@@ -305,10 +305,14 @@ struct MainView: View {
                     .sheet(isPresented: $showProjectSettings) {
                         CreateProjectSettingsView(datasetType: projectSettings.datasetType, folderUrl: folderURL, name: projectSettings.name, description: projectSettings.description, icon: projectSettings.icon ?? "", hashtags: projectSettings.hashtags.joined(separator: ", "), labelStorage: getLabelStorage(byName:projectSettings.labelStorage), editing: true, projectSettings: $projectSettings, showGetData: $showProjectSettings)
                     }
-                    .sheet(isPresented: $showDatasetLevel) {
-                        DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings)
+                    .sheet(isPresented: $showDatasetLevel, onDismiss: {
+                        loadImage(at: currentIndex)
+                    }) {
+                        DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, image: $image)
                     }
-                    .sheet(isPresented: $showConversionMenu) {
+                    .sheet(isPresented: $showConversionMenu, onDismiss: {
+                        loadImage(at: currentIndex)
+                    }) {
                         ConversionMenu(
                             currentFormat: projectSettings.labelStorage,
                             datasetType: projectSettings.datasetType,
@@ -536,7 +540,7 @@ struct MainView: View {
         }
     }
     private func loadLabels() {
-        let labelsFileURL = folderURL
+        let labelsFileURL = folderURL.appending(path: projectSettings.labelSubdirectory)
         let labelStorageFormat = projectSettings.labelStorage
         (labels, labelFileName) = loadLabelsFromFormat(
             labelStorage: labelStorageFormat,
@@ -552,7 +556,7 @@ struct MainView: View {
     }
     func loadImages() {
         do {
-            let files = try FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)
+            let files = try FileManager.default.contentsOfDirectory(at: folderURL.appendingPathComponent(projectSettings.imageSubdirectory), includingPropertiesForKeys: nil)
             images = files.filter { $0.pathExtension.lowercased() == "jpg" || $0.pathExtension.lowercased() == "png"  || $0.pathExtension.lowercased() == "jpeg"  || $0.pathExtension.lowercased() == "heic" }.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
         } catch {
             print("❌ Failed to load images: \(error)")
@@ -622,7 +626,7 @@ struct MainView: View {
     }
     func closeProject()
     {
-        projectSettings = ProjectSettings(name: "", description: "", hashtags: [], datasetType: .none, labelStorage: "", creationDate: Date.now, lastModifiedDate: Date.now, directoryPath: "", classes: [])
+        projectSettings = ProjectSettings(name: "", description: "", hashtags: [], datasetType: .none, labelStorage: "", creationDate: Date.now, lastModifiedDate: Date.now, directoryPath: "", imageSubdirectory:"", labelSubdirectory:"", classes: [])
         projectIsOpenned = false
         selectedProjectType = nil
     }

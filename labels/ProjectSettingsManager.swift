@@ -10,6 +10,8 @@ struct ProjectSettings: Codable {
     var creationDate: Date
     var lastModifiedDate: Date
     var directoryPath: String
+    var imageSubdirectory: String
+    var labelSubdirectory: String
     var selectedClass: YOLOClass?
     var classes: [YOLOClass]
 }
@@ -34,7 +36,10 @@ class ProjectSettingsManager: ObservableObject {
                 labelStorage: "default",
                 creationDate: Date(),
                 lastModifiedDate: Date(),
-                directoryPath: "", classes: []
+                directoryPath: "",
+                imageSubdirectory:"",
+                labelSubdirectory:"",
+                classes: []
             )
             if directoryURL != nil {
                 print("loading settigs")
@@ -47,6 +52,7 @@ class ProjectSettingsManager: ObservableObject {
         }
     }
     public func saveSettings() {
+        
         guard let directoryURL = directoryURL else {
             print("No directory selected for saving settings.")
             return

@@ -20,7 +20,7 @@ struct TrainingView: View {
             }
             Spacer()
             if isTraining {
-                ProgressView(value: progress)
+                ProgressViewWithEstimation(value: progress)
                     .padding()
                     .onAppear {
                         startTraining()

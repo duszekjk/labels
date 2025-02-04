@@ -13,7 +13,7 @@ extension MainView{
                         .cornerRadius(8)
                 }
                 .sheet(isPresented: $showDatasetLevel) {
-                    DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings)
+                    DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, image: $image)
                 }
             } else {
                 labelAdjustmentMenu

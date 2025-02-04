@@ -9,21 +9,20 @@
 import SwiftUI
 
 class GlobalMenuManager: ObservableObject {
-    static let shared = GlobalMenuManager() // Singleton instance
+    static let shared = GlobalMenuManager() 
     
     @Published var isMenuOpen = false
-    @Published var menuContent: AnyView = AnyView(EmptyView()) // Menu content
-    @Published var menuPosition: CGPoint = .zero // Position of the menu
+    @Published var menuContent: AnyView = AnyView(EmptyView())
+    @Published var menuPosition: CGPoint = .zero
 }
 struct GlobalMenuOverlay: View {
     @ObservedObject var manager = GlobalMenuManager.shared
-    @State private var contentHeight: CGFloat = 0 // Track the height of the menu content
+    @State private var contentHeight: CGFloat = 0
 
 
     var body: some View {
         ZStack {
             if manager.isMenuOpen {
-                // Background overlay for dismissing the menu
                 Color.black.opacity(0.3)
                     .edgesIgnoringSafeArea(.all)
                     .simultaneousGesture(
@@ -43,13 +42,13 @@ struct GlobalMenuOverlay: View {
                             GeometryReader { proxy in
                                 Color.clear
                                     .onAppear {
-                                        contentHeight = proxy.size.height // Capture the height of the menu content
+                                        contentHeight = proxy.size.height
                                     }
                             }
                         )
                         .padding(8)
                         .background(
-                            VisualEffectBlur() // Add blur effect
+                            VisualEffectBlur()
                                 .cornerRadius(10)
                         )
                         .foregroundColor(Color(UIColor.label))
