@@ -12,9 +12,9 @@ extension MainView{
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
-                .sheet(isPresented: $showDatasetLevel) {
-                    DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, image: $image)
-                }
+//                .sheet(isPresented: $showDatasetLevel) {
+//                    DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, currentImage: $imageName, image: $image, labels: $labels)
+//                }
             } else {
                 labelAdjustmentMenu
             }

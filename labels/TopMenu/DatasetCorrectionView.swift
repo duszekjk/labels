@@ -1,11 +1,12 @@
 
 import SwiftUI
-import SwiftUI
-import SwiftUI
 struct DatasetCorrectionView: View {
     let folderURL: URL
     @Binding var projectSettings: ProjectSettings
+    @Binding var currentImage: String
     @Binding var image: UIImage?
+    @Binding var labels: [ClassLabel]
+    var onSwitchView: ((Direction) -> Void)
     @Environment(\.presentationMode) var presentationMode
     @State private var progress: Double = 0.0
     @State private var isProcessing = false
@@ -18,6 +19,8 @@ struct DatasetCorrectionView: View {
     @State private var scaleX: CGFloat = 1.0
     @State private var scaleY: CGFloat = 1.0
     @State private var shiftMode: String = "Relative to box size"
+    @State private var labelStrength:Double = 100.0
+    @State private var filterMethod: String = "Closest 3 colors"
     
     
     @State var objectColors: [Color] = []
@@ -96,12 +99,8 @@ struct DatasetCorrectionView: View {
                                     Text("Select colors")
                                 })
                                 .sheet(isPresented: $showColorPicker) {
-                                    ColorPickerView(image: $image, objectColors: $objectColors, backgroundColors: $backgroundColors, presentationMode: $showColorPicker)
-                                }
-                                if(objectColors.count > 3)
-                                {
-                                    Button(action:
-                                            {
+                                    ColorPickerView(folderURL: folderURL, currentImage: $currentImage, image: $image, objectColors: $objectColors, backgroundColors: $backgroundColors, presentationMode: $showColorPicker, labelsStart: $labels, projectSettings: $projectSettings, labelStrength: $labelStrength, filterMethod: $filterMethod, onSwitchView: onSwitchView, filter:
+                                                        {
                                         isProcessing = true
                                         DispatchQueue.global(qos: .userInitiated).async {
                                             filterBoxesByColor(
@@ -109,7 +108,7 @@ struct DatasetCorrectionView: View {
                                                 labelStorage: projectSettings.labelStorage,
                                                 classes: &projectSettings.classes,
                                                 colorsObject: objectColors,
-                                                colorsBackground: backgroundColors,
+                                                colorsBackground: backgroundColors, labelStrength: labelStrength, method: filterMethod,
                                                 progress: { progressValue in
                                                     DispatchQueue.main.async {
                                                         progress = progressValue
@@ -119,11 +118,35 @@ struct DatasetCorrectionView: View {
                                                 isProcessing = false
                                             }
                                         }
-                                    }, label:
-                                            {
-                                        Text("Filter")
                                     })
+                                    .background(Color(platformColor: .systemBackground))
                                 }
+//                                if(objectColors.count > 3)
+//                                {
+//                                    Button(action:
+//                                            {
+//                                        isProcessing = true
+//                                        DispatchQueue.global(qos: .userInitiated).async {
+//                                            filterBoxesByColor(
+//                                                folderURL: folderURL,
+//                                                labelStorage: projectSettings.labelStorage,
+//                                                classes: &projectSettings.classes,
+//                                                colorsObject: objectColors,
+//                                                colorsBackground: backgroundColors, labelStrength: labelStrength, method: filterMethod,
+//                                                progress: { progressValue in
+//                                                    DispatchQueue.main.async {
+//                                                        progress = progressValue
+//                                                    }
+//                                                })
+//                                            DispatchQueue.main.async {
+//                                                isProcessing = false
+//                                            }
+//                                        }
+//                                    }, label:
+//                                            {
+//                                        Text("Filter")
+//                                    })
+//                                }
                             }
                         }
                     }
@@ -297,20 +320,23 @@ struct DatasetCorrectionView: View {
         classes: inout [YOLOClass],
         colorsObject: [Color],
         colorsBackground: [Color],
+        labelStrength: Double,
+        method: String,
         progress: @escaping (Double) -> Void
     ) {
         applyToDatasetWithProgress(folderURL: folderURL, projectSettings: projectSettings, labelStorage: labelStorage, classes: &classes, progress: progress) { fileURL, labels, imgname, projectSettings, classesNow    in
             let imageURL = fileURL.appending(path: projectSettings.imageSubdirectory).appending(path: imgname)
             let maskURL = fileURL.appending(path: projectSettings.labelSubdirectory).appending(path: imgname)
-            filterBoundingBoxesAvg(
+            filterBoundingBoxes(
                 mainImageURL: imageURL,
                 maskImageURL: maskURL,
                 labels: &labels,
                 objectColors: colorsObject,
                 backgroundColors: colorsBackground,
-                speedAccuracyFactor: 50, // Higher values = more samples for accuracy
-                numberOfLabelsScale: 1.5,
-                sharedClasses: classesNow
+                speedAccuracyFactor: 100, // Higher values = more samples for accuracy
+                numberOfLabelsScale: labelStrength,
+                sharedClasses: classesNow,
+                method: method
             )
         }
     }

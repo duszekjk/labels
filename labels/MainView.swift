@@ -308,7 +308,14 @@ struct MainView: View {
                     .sheet(isPresented: $showDatasetLevel, onDismiss: {
                         loadImage(at: currentIndex)
                     }) {
-                        DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, image: $image)
+                        DatasetCorrectionView(folderURL: folderURL, projectSettings: $projectSettings, currentImage: $imageName, image: $image, labels: $labels,
+                                              onSwitchView: { direction in
+                                                  if direction == .left {
+                                                      loadPreviousImage()
+                                                  } else if direction == .right {
+                                                      loadNextImage()
+                                                  }
+                                              })
                     }
                     .sheet(isPresented: $showConversionMenu, onDismiss: {
                         loadImage(at: currentIndex)
@@ -591,11 +598,11 @@ struct MainView: View {
     }
     func loadPreviousImage() {
         selectedLabel = nil
-        loadImage(at: currentIndex - 1)
+        loadImage(at: max(0, currentIndex - 1))
     }
     func loadNextImage() {
         selectedLabel = nil
-        loadImage(at: currentIndex + 1)
+        loadImage(at: min(currentIndex + 1, images.count - 1))
     }
     func resizeLabel(scaleFactor: CGFloat) {
         guard let selected = selectedLabel,
